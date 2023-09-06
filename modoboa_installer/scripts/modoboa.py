@@ -61,7 +61,7 @@ class Modoboa(base.Installer):
         self.dkim_cron_enabled = False
 
     def sanity_check(self, extension, plugin):
-        # Sanity check for plugin requirements
+        """Sanity check for plugin requirements."""
         enabled = False
         if extension in self.extensions:
             if self.config.getboolean(plugin, "enabled"):
@@ -107,11 +107,6 @@ class Modoboa(base.Installer):
         python.install_package(
             "django-braces", self.venv_path, upgrade=self.upgrade,
             sudo_user=self.user
-        )
-        if self.dbengine == "postgres":
-            packages.append("psycopg2-binary\<2.9")
-        else:
-            packages.append("mysqlclient")
         if sys.version_info.major == 2 and sys.version_info.micro < 9:
             # Add extra packages to fix the SNI issue
             packages += ["pyOpenSSL"]
@@ -121,6 +116,23 @@ class Modoboa(base.Installer):
             sudo_user=self.user,
             beta=self.config.getboolean("modoboa", "install_beta")
         )
+
+        db_package = []
+        # We need to install db package afterward to check for installed modoboa version
+        if self.dbengine == "postgres":
+             if self.modoboa_2_2_or_greater:
+                 db_package = ["psycopg[binary]\>3.1.7"]
+            else:
+                db_package = ["psycopg2-binary\<2.9"]
+        else:
+            db_package = "mysqlclient"
+        python.install_packages(
+            db_package, self.venv_path,
+            upgrade=self.upgrade,
+            sudo_user=self.user,
+            beta=self.config.getboolean("modoboa", "install_beta")
+        )
+
         if self.devmode:
             # FIXME: use dev-requirements instead
             python.install_packages(
@@ -250,6 +262,7 @@ class Modoboa(base.Installer):
             "radicale_enabled": (
                 "" if "modoboa-radicale" in extensions else "#"),
             "opendkim_user": self.config.get("opendkim", "user"),
+            "dkim_user":  "_rspamd" if self.config.getboolean("rspamd", "enabled") else self.config.get("opendkim", "user")
             "minutes": random.randint(1, 59),
             "hours": f"{random_hour},{random_hour+12}",
             "modoboa_2_2_or_greater": "" if self.modoboa_2_2_or_greater else "#",
@@ -290,9 +303,19 @@ class Modoboa(base.Installer):
         for path in ["/var/log/maillog", "/var/log/mail.log"]:
             if os.path.exists(path):
                 settings["maillog"]["logfile"] = path
+
         if self.config.getboolean("opendkim", "enabled"):
             settings["admin"]["dkim_keys_storage_dir"] = (
                 self.config.get("opendkim", "keys_storage_dir"))
+
+        if self.config.getboolean("rspamd", "enabled"):
+            settings["admin"]["dkim_keys_storage_dir"] = (
+                self.config.get("rspamd", "dkim_keys_storage_dir"))
+            settings["modoboa_rspamd"]["key_map_path"] = (
+                self.config.get("rspamd", "key_map_path"))
+            settings["modoboa_rspamd"]["selector_map_path"] = (
+                self.config.get("rspamd", "selector_map_path"))
+
         settings = json.dumps(settings)
         query = (
             "UPDATE core_localconfig SET _parameters='{}'"
