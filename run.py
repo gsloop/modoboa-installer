@@ -199,11 +199,11 @@ def main(input_args):
     # Check if config is outdated and ask user if it needs to be updated
     if is_config_file_available and outdate_config:
         answer = utils.user_input("It seems that your config file is outdated. "
-                                  "Would you like to update it? (Y/n) ")
+                                  "Would you like to update it? (y/N) ")
         if answer.lower().startswith("y"):
             config_file_update_complete(utils.update_config(args.configfile))
             if not args.stop_after_configfile_check:
-                answer = utils.user_input("Would you like to stop to review the updated config? (Y/n)")
+                answer = utils.user_input("Would you like to stop to review the updated config? (y/N)")
                 if answer.lower().startswith("y"):
                     return
         else:
